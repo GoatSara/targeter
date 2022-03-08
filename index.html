@@ -1,0 +1,188 @@
+<html>
+    <head>
+        <style>
+            html { background-color: #000000; color: #FFFFFF; }
+        </style>
+    </head>
+<body>
+    <canvas id="canvas" width="800", height="800"></canvas><br />
+    <button onclick="tick()">Tick</button>
+    <script>
+        class V2 {
+            constructor (x=0, y=0) {
+                this.x = x;
+                this.y = y;
+            }
+            equals (v) {
+                return Math.floor(this.x) == Math.floor(v.x) && Math.floor(this.y) == Math.floor(v.y);
+            }
+            distancesquared(v) {
+                return ((this.x - v.x) ** 2) + ((this.y - v.y) ** 2)
+            }
+            distance(v) {
+                return Math.sqrt(this.distancesquared(v));
+            }
+            add(v) {
+                return new V2(this.x + v.x, this.y + v.y);
+            }
+            subtract(v) {
+                return new V2(this.x - v.x, this.y - v.y);
+            }
+            times(v) {
+                return new V2(this.x * v, this.y * v);
+            }
+            divide(v) {
+                return new V2(this.x / v, this.y / v);
+            }
+            size() {
+                return Math.abs(this.x) + Math.abs(this.y);
+            }
+            normalize() {
+                var a = this.x ** 2 + this.y ** 2;
+                var b = Math.sqrt(a);
+                var c = 1 / b;
+                return new V2(this.x * c, this.y * c);
+            }
+            neg() {
+                return new V2(-this.x, -this.y);
+            }
+            inside(mix, miy, max, may) {
+                return this.x >= mix && this.x <= max && this.y >= miy && this.y <= may;
+            }
+            toString() {
+                return 'V2(' + this.x + ', ' + this.y + ')';
+            }
+            static random(min1, min2, max1, max2) {
+                return new V2(rand(min1, max1), rand(min2, max2));
+            }
+        }
+
+        class Projectile {
+            constructor(position, momentum) {
+                this.position = position;
+                this.momentum = momentum;
+            }
+            tick() {
+                this.position = this.position.add(this.momentum);
+            }
+            inside() {
+                return this.position.inside(0, 0, 800, 800);
+            }
+            wrap() {
+                this.position = new V2(this.position.x % 800, this.position.y % 800);
+            }
+        }
+
+        function lerp(f, t, s) {
+            return f - ((f - t) * s);
+        }
+
+        function rand(min, max) {
+            return min + Math.floor(Math.random() * (max - min + 1));
+        }
+
+        function mod(f, s) {
+            var a = f % s;
+            if (a >= 0) return a;
+            return (a + s) % s;
+        }
+
+        function algorithm(mypos, myvel, targpos, targvel, projspeed) {
+            //console.log(JSON.stringify([mypos, myvel, targpos, targvel, projspeed]));
+            // [{"x":210.63681772921313,"y":556.0828463024299},null,{"x":426.88312100586404,"y":137.12992951650665},{"x":2.1119571799390604,"y":-0.8880428200609396},10]
+            // How many ticks it will take to reach target
+            // In the future the target will have a different distance?
+            // To know where the target will be in x many ticks you need to know how many ticks it will
+            // take to reach the target and the opposite so I guess you must run it in steps
+            // To to where the target will be in x time you need to know how long time for the projectile to reach it
+            // and the opposite
+            // calculate in how many ticks projectile will be somewhere and compensate?
+
+            // Distance from position to target
+            var dist = mypos.distance(targpos);
+            // It will take x amount of seconds to reach target
+            var totarget = dist / projspeed;
+            // In x amount of seconds the target will have the following position
+            var targetfuture = targpos.add(targvel.subtract(myvel).times(totarget));
+            for (var i = 0; i < 10; i++) {
+                dist = mypos.distance(targetfuture);
+                totarget = dist / projspeed;
+                targetfuture = targpos.add(targvel.subtract(myvel).times(totarget));
+            }
+            // The vector for where to shoot to hit
+            var futuredir = targetfuture.subtract(mypos).normalize();
+            lines = [[mypos, targetfuture], [targpos, targetfuture]];
+            //console.log(JSON.stringify(lines));
+            return futuredir;
+        }
+
+        function drawcube(cx, cube, size) {
+            hsize = size / 2;
+            cx.fillRect(cube.x - hsize, cube.y - hsize, size, size);
+        }
+
+        function draw() {
+            cx.fillStyle = '#000009';
+            cx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+            cx.fillStyle = '#000900';
+            cx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight / 2);
+            cx.fillStyle = '#FFFFFF';
+            drawcube(cx, target.position, 10);
+            drawcube(cx, other.position, 10);
+            for (var proj of projectiles) {
+                drawcube(cx, proj.position, 5);
+            }
+            cx.strokeStyle = '#ff00ff';
+            for (var line of lines) {
+                cx.beginPath();
+                cx.moveTo(line[0].x, line[0].y);
+                cx.lineTo(line[1].x, line[1].y);
+                cx.closePath();
+                cx.stroke();
+            }
+        }
+        function tick() {
+            if (!target.position.inside(5, 5, 795, 395)) {
+                var r = V2.random(50, 50, 750, 350);
+                var a = r.subtract(target.position).normalize();
+                var b = a.times(rand(1, 5));
+                target.momentum = b;
+            }
+            if (!other.position.inside(4, 404, 795, 795)) {
+                var r = V2.random(10, 450, 750, 750);
+                var direction = r.subtract(other.position).normalize();
+                var velocity = direction.times(rand(5, 9));
+                other.momentum = velocity;
+            }
+            target.position = target.position.add(target.momentum);
+            other.position = other.position.add(other.momentum);
+            shotcounter++;
+            if (shotcounter > 10) {
+                shotcounter = 0;
+                //var direction = other.position.subtract(target.position).norm();
+                //var velocity = direction.times(10);
+                //projectiles.push(new Projectile(target.position, velocity))
+
+                var n = algorithm(other.position, other.momentum, target.position, target.momentum, 10);
+                projectiles.push(new Projectile(other.position, other.momentum.add(n.times(10))))
+            }
+            for (var proj of projectiles) {
+                proj.tick();
+                //if (!proj.inside()) proj.wrap();
+            }
+            projectiles = projectiles.filter((p) => p.inside());
+            draw();
+        }
+        var target = {position: new V2(100, 100), momentum: new V2(1, 1), toString: function() {return 'Target p=' + this.position + ' m=' + this.momentum;}};
+        var other = {position: new V2(100, 700), momentum: new V2(1, 1), toString: function() {return 'Other p=' + this.position + ' m=' + this.momentum;}};
+        var projectiles = [];
+        var lines = [];
+        var shotcounter = 0;
+
+        var canvas = document.getElementById('canvas');
+        var cx = canvas.getContext('2d');
+        tick();
+        var timer = setInterval(tick, 10);
+    </script>
+</body>
+</html>
